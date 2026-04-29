@@ -3,17 +3,19 @@ from youtube_transcript_api import YouTubeTranscriptApi
 import re
 
 def extract_video_id(url):
+    # This regex handles almost every YouTube URL format (shorts, live, mobile)
     pattern = r'(?:v=|\/|be\/)([0-9A-Za-z_-]{11})'
     match = re.search(pattern, url)
     return match.group(1) if match else None
 
 def get_script_layout(video_id):
     try:
-        # This is the most compatible way to call the transcript
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        # Standard, most compatible way to pull a transcript
+        transcript_data = YouTubeTranscriptApi.get_transcript(video_id)
         
         script = ""
-        for entry in transcript_list:
+        for entry in transcript_data:
+            # Create the [MM:SS] format you wanted
             start_time = int(entry['start'])
             minutes = start_time // 60
             seconds = start_time % 60
@@ -34,11 +36,11 @@ if video_url:
     video_id = extract_video_id(video_url)
     if video_id:
         if st.button("Generate Script"):
-            with st.spinner("Grabbing the words..."):
+            with st.spinner("Extracting..."):
                 final_script = get_script_layout(video_id)
                 
                 if "Error:" in final_script:
-                    st.error("Could not find transcript. Make sure the video has Captions (CC) enabled on YouTube!")
+                    st.error(f"Could not find transcript. {final_script}")
                 else:
                     st.subheader("Formatted Script")
                     st.text_area("Your Script:", value=final_script, height=400)
