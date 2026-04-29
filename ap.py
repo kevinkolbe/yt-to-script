@@ -9,10 +9,17 @@ def extract_video_id(url):
 
 def get_script_layout(video_id):
     try:
-        # The NEW 2026 way to call the transcript
-        ytt_api = YouTubeTranscriptApi()
-        # We try to fetch the transcript data
-        transcript_data = ytt_api.fetch(video_id).to_raw_data()
+        # Get all available transcripts for the video
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        
+        # Try to find an English transcript (manual or auto-generated)
+        try:
+            transcript = transcript_list.find_transcript(['en'])
+        except:
+            # If no English, just grab the first one available
+            transcript = transcript_list.find_generated_transcript(['en'])
+            
+        transcript_data = transcript.fetch()
         
         script = ""
         for entry in transcript_data:
@@ -36,11 +43,11 @@ if video_url:
     video_id = extract_video_id(video_url)
     if video_id:
         if st.button("Generate Script"):
-            with st.spinner("Processing your video..."):
+            with st.spinner("Searching for captions..."):
                 final_script = get_script_layout(video_id)
                 
                 if "Error:" in final_script:
-                    st.error("Transcript not found. Tip: Check if 'Captions' are available on the YouTube video itself!")
+                    st.error("No transcript found. Check if the video has 'Captions' (CC) turned on in the YouTube settings.")
                 else:
                     st.subheader("Formatted Script")
                     st.text_area("Your Script Layout:", value=final_script, height=400)
@@ -48,7 +55,7 @@ if video_url:
                     st.download_button(
                         label="Download Script",
                         data=final_script,
-                        file_name="kevin_kolbe_script.txt",
+                        file_name="video_script.txt",
                         mime="text/plain"
                     )
     else:
