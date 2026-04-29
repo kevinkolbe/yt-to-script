@@ -9,15 +9,18 @@ def extract_video_id(url):
 
 def get_script_layout(video_id):
     try:
-        # Get all available transcripts for the video
+        # We try a specific language order to bypass some filtering
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         
-        # Try to find an English transcript (manual or auto-generated)
+        # Look for manual English, then auto English, then anything else
         try:
             transcript = transcript_list.find_transcript(['en'])
         except:
-            # If no English, just grab the first one available
-            transcript = transcript_list.find_generated_transcript(['en'])
+            try:
+                transcript = transcript_list.find_generated_transcript(['en'])
+            except:
+                # Fallback to the first available transcript in the list
+                transcript = next(iter(transcript_list))
             
         transcript_data = transcript.fetch()
         
@@ -30,7 +33,11 @@ def get_script_layout(video_id):
             script += f"{timestamp} {entry['text']}\n"
         return script
     except Exception as e:
-        return f"Error: {str(e)}"
+        # If we get a "RequestBlocked" or "Proxy" error, we know it's a Cloud Ban
+        error_msg = str(e)
+        if "RequestBlocked" in error_msg or "too many requests" in error_msg.lower():
+            return "ERROR_CLOUD_BAN"
+        return f"Error: {error_msg}"
 
 # Streamlit UI
 st.set_page_config(page_title="YouTube to Script", page_icon="🎥")
@@ -43,11 +50,14 @@ if video_url:
     video_id = extract_video_id(video_url)
     if video_id:
         if st.button("Generate Script"):
-            with st.spinner("Searching for captions..."):
+            with st.spinner("Extracting..."):
                 final_script = get_script_layout(video_id)
                 
-                if "Error:" in final_script:
-                    st.error("No transcript found. Check if the video has 'Captions' (CC) turned on in the YouTube settings.")
+                if final_script == "ERROR_CLOUD_BAN":
+                    st.error("⚠️ YouTube is currently blocking this server's IP address. This happens sometimes with free cloud hosting.")
+                    st.info("Try again in a few minutes, or use a different video link to 'wake' the connection.")
+                elif "Error:" in final_script:
+                    st.error(f"Could not find transcript. {final_script}")
                 else:
                     st.subheader("Formatted Script")
                     st.text_area("Your Script Layout:", value=final_script, height=400)
@@ -55,8 +65,7 @@ if video_url:
                     st.download_button(
                         label="Download Script",
                         data=final_script,
-                        file_name="video_script.txt",
-                        mime="text/plain"
+                        file_name="video_script.txt"
                     )
     else:
         st.warning("Please enter a valid YouTube URL.")
